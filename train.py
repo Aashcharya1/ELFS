@@ -4,6 +4,9 @@ from torchvision import datasets, transforms
 import torch.nn as nn
 import torch.optim as optim
 import os, sys
+
+# Windows + spawn: DataLoader workers must be 0 unless the script uses `if __name__ == '__main__':`.
+_NUM_DL_WORKERS = 0 if sys.platform == 'win32' else 16
 import argparse
 import pickle
 import pandas as pd
@@ -49,7 +52,7 @@ parser.add_argument('--task-name', type=str, default='tmp',
 
 ######################### Coreset Setting #########################
 parser.add_argument('--coreset', action='store_true', default=False)
-parser.add_argument('--coreset-mode', type=str, choices=['random', 'coreset', 'stratified', 'swav', 'badge', 'budget'])
+parser.add_argument('--coreset-mode', type=str, choices=['random', 'coreset', 'stratified', 'swav', 'badge', 'budget', 'adaptive'])
 
 
 parser.add_argument('--data-score-path', type=str)
@@ -83,14 +86,13 @@ parser.add_argument('--pseudo-test-label-path', type=str, help='Path for the pse
 parser.add_argument('--save-coreset', action='store_true', default=True)
 parser.add_argument('--end-early', action='store_true', default=False)
 
+######################### Novelty 3: Early-Stopping Proxy Dynamics #########################
+parser.add_argument('--early-stop-td-ratio', type=float, default=1.0,
+                    help='Fraction of total epochs to collect training dynamics (default 1.0 = all). '
+                         'E.g. 0.2 stops TD logging after 20%% of epochs.')
+
 ######################### Setting for Future Use #########################
 parser.add_argument('--load-from-best', action='store_true', default=False)
-# parser.add_argument('--ckpt-name', type=str, default='model.ckpt',
-#                     help='The name of the checkpoint.')
-# parser.add_argument('--lr-scheduler', choices=['step', 'cosine'])
-# parser.add_argument('--network', choices=model_names, default='resnet18')
-# parser.add_argument('--pretrained', action='store_true')
-# parser.add_argument('--augment', choices=['cifar10', 'rand'], default='cifar10')
 
 args = parser.parse_args()
 start_time = datetime.now()
@@ -202,7 +204,13 @@ if args.coreset:
 
         print(f'Length of coreset: {len(coreset_index)}')
 
-        
+    ################### Novelty 1: Adaptive Pruning (GMM) ###################
+    if args.coreset_mode == 'adaptive':
+        score_key = args.coreset_key if args.coreset_key else 'accumulated_margin'
+        coreset_index = CoresetSelection.adaptive_selection(
+            data_score, score_key=score_key)
+        print(f'Length of adaptive coreset: {len(coreset_index)}')
+
 
     if args.coreset_mode == 'swav':
         enhance = False
@@ -281,7 +289,7 @@ elif args.dataset == 'cinic10':
     testset = CINIC10Dataset.get_cinic10_test(data_dir)
 
 
-if args.load_pseudo:
+if args.load_pseudo and args.pseudo_test_label_path:
     if "cifar" in args.dataset:
         print(f"Loading Pseudo dataset labels from {args.pseudo_test_label_path}")
         testset = CIFARDataset.load_custom_labels(testset, args.pseudo_test_label_path)
@@ -300,9 +308,9 @@ print('First 100 test label:')
 print([int(testset[i][1]) for i in range(100)])
 
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=args.batch_size, shuffle=True, num_workers=16)
+    trainset, batch_size=args.batch_size, shuffle=True, num_workers=_NUM_DL_WORKERS)
 testloader = torch.utils.data.DataLoader(
-    testset, batch_size=512, shuffle=True, num_workers=16)
+    testset, batch_size=512, shuffle=True, num_workers=_NUM_DL_WORKERS)
 
 # import ipdb ; ipdb.set_trace()
 
@@ -319,10 +327,16 @@ else:
     num_of_iterations = args.iterations
 
 
-if args.dataset in ['cifar10', 'svhn', 'cinic10', 'stl10']:
-    num_classes=10
+if args.load_pseudo:
+    _lab = trainset.dataset.targets
+    num_classes = int(torch.as_tensor(_lab).long().max().item()) + 1
+    print(f'num_classes={num_classes} (from pseudo label range)')
+elif args.dataset in ['cifar10', 'svhn', 'cinic10', 'stl10']:
+    num_classes = 10
 elif args.dataset == 'cifar100':
-    num_classes=100
+    num_classes = 100
+else:
+    num_classes = 10
 
 if args.network == 'resnet18':
     print('resnet18')
@@ -350,6 +364,13 @@ print(f'Iterations per epoch: {iterations_per_epoch}')
 print(f'Total iterations: {num_of_iterations}')
 print(f'Epochs per testing: {epoch_per_testing}')
 
+################### Novelty 3: Early-Stopping Proxy Dynamics ###################
+total_epochs_approx = num_of_iterations // iterations_per_epoch
+td_cutoff_epoch = int(total_epochs_approx * args.early_stop_td_ratio)
+if args.early_stop_td_ratio < 1.0:
+    print(f'[Early-Stop TD] Will stop logging training dynamics after epoch {td_cutoff_epoch} '
+          f'({args.early_stop_td_ratio*100:.0f}% of ~{total_epochs_approx} epochs).')
+
 trainer = Trainer()
 if args.ignore_td:
     TD_logger = None
@@ -364,7 +385,7 @@ best_epoch = -1
 # check if load from best
 if args.load_from_best:
     print('Load from best ckpt')
-    state = torch.load(best_ckpt_path)
+    state = torch.load(best_ckpt_path, weights_only=False)
 
     model.load_state_dict(state['model_state_dict'])
     current_epoch = state['epoch']
@@ -380,7 +401,15 @@ if args.load_from_best:
 
 while num_of_iterations > 0:
     iterations_epoch = min(num_of_iterations, iterations_per_epoch)
-    trainer.train(current_epoch, -1, model, trainloader, optimizer, criterion, scheduler, device, TD_logger=TD_logger, log_interval=60, printlog=True)
+
+    # Novelty 3: conditionally disable TD logging after cutoff epoch
+    active_td_logger = TD_logger
+    if TD_logger is not None and current_epoch >= td_cutoff_epoch:
+        if current_epoch == td_cutoff_epoch and args.early_stop_td_ratio < 1.0:
+            print(f'[Early-Stop TD] Stopping training dynamics logging at epoch {current_epoch}.')
+        active_td_logger = None
+
+    trainer.train(current_epoch, -1, model, trainloader, optimizer, criterion, scheduler, device, TD_logger=active_td_logger, log_interval=60, printlog=True)
 
     num_of_iterations -= iterations_per_epoch
 

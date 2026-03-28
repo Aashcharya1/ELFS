@@ -61,18 +61,26 @@ def print_results(d):
 
 def load_tensorboard_loss(path):
     tag = 'Train loss epoch'
-    event_acc = EventAccumulator(str(next(path.glob('event*'))))
+    path = Path(path)
+    # Load all tfevents in the run directory (not a single file — multiple runs may leave several files).
+    event_acc = EventAccumulator(str(path))
     event_acc.Reload()
-    if tag in event_acc.Tags()['scalars']:
+    scalars = event_acc.Tags().get('scalars') or []
+    if tag in scalars:
         return pd.DataFrame([{'Epoch': ev.step, 'loss': ev.value}
                              for ev in event_acc.Scalars(tag)]).set_index('Epoch')
     # Multihead case
     dfs = []
     for p in path.rglob('Train loss*/event*'):
-        event_acc = EventAccumulator(str(p))
+        event_acc = EventAccumulator(str(p.parent))
         event_acc.Reload()
-        dfs.append(pd.DataFrame([{'Epoch': ev.step, 'loss': ev.value}
-                                 for ev in event_acc.Scalars(tag)]).set_index('Epoch'))
+        if tag in (event_acc.Tags().get('scalars') or []):
+            dfs.append(pd.DataFrame([{'Epoch': ev.step, 'loss': ev.value}
+                                     for ev in event_acc.Scalars(tag)]).set_index('Epoch'))
+    if not dfs:
+        raise ValueError(
+            f"No TensorBoard scalars with tag {tag!r} under {path}. "
+            "Remove stale events.out.tfevents.* files or re-run cluster training.")
     df = pd.concat(dfs)
     return df.groupby('Epoch').min()
 
@@ -113,7 +121,7 @@ def main():
     for ckpt in checkpoint_list[:-1]:
         print(ckpt)
         # Epoch number for next epoch is saved in the checkpoint
-        epoch = torch.load(ckpt, map_location='cpu')['epoch'] - 1
+        epoch = torch.load(ckpt, map_location='cpu', weights_only=False)['epoch'] - 1
         epochs.append(epoch)
         if extractor is None or args.no_cache:
             extractor = FeatureExtractionPipeline(args, cache_backbone=not args.no_cache, datapath=args.datapath)

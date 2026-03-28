@@ -14,7 +14,7 @@ class CIFARDataset(object):
     @staticmethod
     def load_custom_labels(dataset, label_path):
         if label_path.endswith('.pt'):
-            labels = torch.load(label_path)
+            labels = torch.load(label_path, weights_only=False)
             assert len(labels) == len(dataset)
             # calculate misclassification rate using hungarian algorithm
             mis_cls = calculate_hungarian_misclassification_rate(labels, dataset.targets)
@@ -111,7 +111,7 @@ class SVHNDataset(object):
     @staticmethod
     def load_custom_labels(dataset, label_path):
         if label_path.endswith('.pt'):
-            labels = torch.load(label_path)
+            labels = torch.load(label_path, weights_only=False)
             assert len(labels) == len(dataset)
 
             mis_cls = calculate_hungarian_misclassification_rate(labels, dataset.labels)
@@ -140,7 +140,7 @@ class CINIC10Dataset(object):
     @staticmethod
     def load_custom_labels(dataset, label_path, is_val=False, is_test=False):
         if label_path.endswith('.pt'):
-            labels = torch.load(label_path)
+            labels = torch.load(label_path, weights_only=False)
             if is_test:
                 assert len(labels) == len(dataset), "Label count does not match dataset size."
             elif is_val:
@@ -200,7 +200,7 @@ class STL10Dataset(object):
     @staticmethod
     def load_custom_labels(dataset, label_path):
         if label_path.endswith('.pt'):
-            labels = torch.load(label_path)
+            labels = torch.load(label_path, weights_only=False)
             assert len(labels) == len(dataset)
             # calculate misclassification rate using Hungarian algorithm
             mis_cls = calculate_hungarian_misclassification_rate(labels, dataset.labels)

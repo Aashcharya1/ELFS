@@ -166,4 +166,45 @@ class CoresetSelection(object):
         score_random_index = torch.randperm(total_num)
 
         return score_random_index[:int(num)]
+
+    @staticmethod
+    def adaptive_selection(data_score, score_key='accumulated_margin'):
+        """GMM-based adaptive coreset selection.
+
+        Uses pre-computed GMM thresholds (stored in data_score by
+        generate_importance_score.py) to keep only the samples whose
+        score falls in the 'Ambiguous / Useful' region.
+
+        Parameters
+        ----------
+        data_score : dict
+            Must contain ``score_key`` and ``'gmm_thresholds'`` (a tuple
+            of (threshold_low, threshold_high)).
+        score_key : str
+            Which score to threshold on (default: accumulated_margin).
+
+        Returns
+        -------
+        coreset_index : Tensor of selected indices.
+        """
+        assert 'gmm_thresholds' in data_score, \
+            "data_score dict has no 'gmm_thresholds'. " \
+            "Re-run generate_importance_score.py to compute them."
+
+        threshold_low, threshold_high = data_score['gmm_thresholds']
+        scores = data_score[score_key]
+        total_num = len(scores)
+
+        mask = (scores >= threshold_low) & (scores <= threshold_high)
+        coreset_index = torch.arange(total_num)[mask]
+
+        print(f'=== Adaptive Selection (GMM) ===')
+        print(f'  Score key: {score_key}')
+        print(f'  Threshold low:  {threshold_low:.6f}')
+        print(f'  Threshold high: {threshold_high:.6f}')
+        print(f'  Selected {len(coreset_index)} / {total_num} '
+              f'({len(coreset_index)/total_num*100:.1f}%)')
+        print(f'================================')
+
+        return coreset_index
     

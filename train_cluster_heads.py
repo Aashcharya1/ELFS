@@ -273,6 +273,10 @@ def train_one_epoch(student_teacher_model, dino_loss, data_loader,
         # teacher and student forward passes + compute dino loss
         with torch.cuda.amp.autocast(fp16_scaler is not None):
             teacher_out, student_out = student_teacher_model(images)
+            if losses.is_multihead(dino_loss) and args.num_heads == 1:
+                if not isinstance(student_out, list):
+                    student_out = [student_out]
+                    teacher_out = [teacher_out]
             if losses.is_multihead(dino_loss) or args.num_heads == 1:
                 head_losses = dino_loss(student_out, teacher_out, epoch=epoch)
             else:

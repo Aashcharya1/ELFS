@@ -63,7 +63,7 @@ def get_outpath(arch, dataset, datapath='data'):
 def get_nn(args, preprocess, model, test=False):
     datapath = '../datasets/' if  args.dataset in ["CIFAR10", "CIFAR100", "STL10", "CIFAR20"] else args.datapath
     dset = get_dataset(args.dataset, datapath=datapath, train=not test, transform=preprocess, download=True)
-    dataloader = torch.utils.data.DataLoader(dset, batch_size=args.batch_size, shuffle=False, drop_last=False, pin_memory=True, num_workers=16)
+    dataloader = torch.utils.data.DataLoader(dset, batch_size=args.batch_size, shuffle=False, drop_last=False, pin_memory=True, num_workers=4)
     embeddings, label = compute_embedding(model, dataloader)    
     embeddings = embeddings.squeeze()
     k = args.k or len(dset) // len(dset.classes)
@@ -147,7 +147,7 @@ if __name__ == '__main__':
     parser.add_argument('--classifier-k', default=20, type=int, help='Numbers of neighbors to use in the classifier')
     parser.add_argument('-k', type=int, default=None, help='total NNs to compute. Default: num images / num classes')
     parser.add_argument('--vit_image_size', type=int, default=224)
-    parser.add_argument('--batch_size', type=int, default=512)
+    parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--datapath', default='./data', type=str)
     parser.add_argument('--no_eval_knn', action='store_true', help='Do not evaluate k-nn accuracy', default=False)
     parser.add_argument('--stats_only', action='store_true',

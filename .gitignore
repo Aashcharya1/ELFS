@@ -1,0 +1,72 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project: data, embeddings, and downloads (large / reproducible)
+data/
+datasets/
+**/embeddings/
+*.pt
+*.pth
+*.pickle
+*.pkl
+*.npy
+*.npz
+
+# Project: checkpoints, runs, and experiment outputs
+data-model/
+experiments/
+runs/
+logs/
+*.log
+wandb/
+tensorboard/
+**/events.out.tfevents.*
+
+# TensorBoard / checkpoints by name pattern
+checkpoint*.pth
+ckpt*.pt
+ckpt*.pth
+
+# Optional: keep a placeholder if you use empty dirs
+# !data/.gitkeep
