@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 
 import pickle
 import matplotlib.pyplot as plt
-import seaborn as sns
 import os
 import torch
 
@@ -21,7 +20,7 @@ import matplotlib.pyplot as plt
 from core.utils.misc import map_pseudo_label_hungarian
 
 
-def plot_log_density_graph(gt_score, score, stride=2, num_ticks=5):
+def plot_log_density_graph(gt_score, score, stride=2, num_ticks=5, filename=None):
     """
     Plots the log density graph for the given ground truth and predicted scores.
     
@@ -55,6 +54,9 @@ def plot_log_density_graph(gt_score, score, stride=2, num_ticks=5):
 
     plt.xlabel('Pseudo Label AUM')
     plt.ylabel('Ground Truth Label AUM')
+
+    if filename:
+        plt.savefig(filename, bbox_inches='tight')
 
     plt.show()
 
@@ -322,7 +324,7 @@ def plot_data_score_distribution(score, title, x_range=None, y_range=None, scale
     plt.show()
 
 
-def plot_pseudo_gt_aum(score, gt_score, mislabel_indices, title, point_size=10, draw_correct=True, draw_mis=True, draw_all=False):
+def plot_pseudo_gt_aum(score, gt_score, mislabel_indices, title, point_size=10, draw_correct=True, draw_mis=True, draw_all=False, filename=None):
     plt.figure(figsize=(10, 6))
 
     if draw_all:
@@ -348,6 +350,8 @@ def plot_pseudo_gt_aum(score, gt_score, mislabel_indices, title, point_size=10, 
     plt.title(title)
     plt.legend()
     plt.grid(True)
+    if filename:
+        plt.savefig(filename, bbox_inches='tight')
     plt.show()
 
 ##############<-Clusterings and Embedings->##############

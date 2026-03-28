@@ -49,8 +49,13 @@ class Trainer(object):
                 TD_logger.log_tuple(log_tuple)
 
             if printlog and log_interval and batch_idx % log_interval == 0:
+                elapsed = (datetime.now() - start_time).total_seconds()
+                avg = elapsed / (batch_idx + 1)
                 print(f"{batch_idx}/{len(dataloader)}")
-                print(f'>> batch_idx [{batch_idx}]: Time consumed: {(datetime.now() - start_time).total_seconds():.2f}')
+                print(
+                    f'>> batch_idx [{batch_idx}]: elapsed since epoch start: {elapsed:.2f}s '
+                    f'(avg ~{avg:.2f}s/batch; not time for this batch alone)'
+                )
 
             remaining_iterations -= 1
             if remaining_iterations == 0:
